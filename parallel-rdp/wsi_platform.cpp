@@ -1,8 +1,55 @@
 #include "wsi_platform.hpp"
+#include "vulkan/vulkan.h"
 #include <SDL3/SDL_vulkan.h>
+
+#if defined(__APPLE__)
+#include <SDL3/SDL_syswm.h>
+#include <vulkan/vulkan_metal.h>
+#import <Metal/Metal.h>
+#import <QuartzCore/CAMetalLayer.h>
+#endif
 
 VkSurfaceKHR SDL_WSIPlatform::create_surface(VkInstance instance, VkPhysicalDevice gpu)
 {
+#if defined(__APPLE__)
+	(void)gpu;
+	VkSurfaceKHR surface = nullptr;
+
+	SDL_SysWMinfo wmInfo;
+	SDL_GetWindowWMInfo(window, &wmInfo, SDL_SYSWM_CURRENT_VERSION);
+	NSWindow *nswindow = wmInfo.info.cocoa.window;
+
+	id view = [nswindow contentView];
+
+	if (![view wantsLayer])
+		[view setWantsLayer:YES];
+
+	if (![[view layer] isKindOfClass:[CAMetalLayer class]])
+		[view setLayer:[CAMetalLayer layer]];
+
+	CAMetalLayer* metalLayer = (CAMetalLayer*)[view layer];
+
+	VkMetalSurfaceCreateInfoEXT createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
+	createInfo.pLayer = metalLayer;
+
+	PFN_vkCreateMetalSurfaceEXT vkCreateMetalSurfaceEXT =
+		(PFN_vkCreateMetalSurfaceEXT)vkGetInstanceProcAddr(instance, "vkCreateMetalSurfaceEXT");
+
+	if (!vkCreateMetalSurfaceEXT)
+	{
+		printf("Failed to get vkCreateMetalSurfaceEXT.\n");
+		return nullptr;
+	}
+
+	if (vkCreateMetalSurfaceEXT(instance, &createInfo, nullptr, &surface) != VK_SUCCESS)
+	{
+		printf("Error creating Metal surface\n");
+		return nullptr;
+	}
+
+	return surface;
+#else
 	VkSurfaceKHR surface = nullptr;
 	bool result = SDL_Vulkan_CreateSurface(window, instance, NULL, &surface);
 	if (result != true)
@@ -10,11 +57,12 @@ VkSurfaceKHR SDL_WSIPlatform::create_surface(VkInstance instance, VkPhysicalDevi
 		printf("Error creating surface\n");
 	}
 	return surface;
+#endif
 }
 
 void SDL_WSIPlatform::destroy_surface(VkInstance instance, VkSurfaceKHR surface)
 {
-	SDL_Vulkan_DestroySurface(instance, surface, NULL);
+	vkDestroySurfaceKHR(instance, surface, nullptr);
 }
 
 std::vector<const char *> SDL_WSIPlatform::get_instance_extensions()

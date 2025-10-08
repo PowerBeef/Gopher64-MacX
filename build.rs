@@ -95,6 +95,16 @@ fn main() {
             .unwrap();
     }
 
+    if os == "macos" {
+        volk_build.flag("-DVK_USE_PLATFORM_METAL_EXT");
+        rdp_build.flag("-DVK_USE_PLATFORM_METAL_EXT");
+        rdp_build.flag("-ObjC++");
+        println!("cargo:rustc-link-lib=framework=Metal");
+        println!("cargo:rustc-link-lib=framework=QuartzCore");
+        println!("cargo:rustc-link-lib=dylib=c++");
+        println!("cargo:rustc-link-lib=dylib=MoltenVK");
+    }
+
     volk_build.flag("-flto=thin");
     rdp_build.flag("-flto=thin");
     simd_build.flag("-flto=thin");
